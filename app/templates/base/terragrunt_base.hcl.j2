@@ -1,0 +1,116 @@
+locals {
+  # Inherited Variables
+  global_vars  = read_terragrunt_config(find_in_parent_folders("global.hcl")).locals
+  account_vars = read_terragrunt_config(find_in_parent_folders("account.hcl")).locals
+  region_vars  = read_terragrunt_config(find_in_parent_folders("region.hcl")).locals
+
+  # Basic Context
+  env          = local.region_vars.env
+  aws_region   = local.region_vars.aws_region
+  tg_local     = {{ tg_local | lower }}
+  backend_type = {{ '"local"' if tg_local else '"s3"' }}
+
+  # Metadata
+  account_id   = local.account_vars.account_id
+  profile_name = local.account_vars.profile_name
+  project_name = local.account_vars.project_name
+
+  # Backend Resources
+  state_bucket   = format("terraform-states-%s-%s", local.account_id, local.aws_region)
+  dynamodb_table = format("terraform-states-%s-%s", local.account_id, local.aws_region)
+}
+
+terraform_version_constraint  = "{{ terraform_version_constraint }}"
+terragrunt_version_constraint = "{{ terragrunt_version_constraint }}"
+
+generate "constraints" {
+  path      = "_constraints.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+    terraform {
+      required_version = "${local.terraform_version_constraint}"
+    }
+  EOF
+}
+
+generate "versions" {
+  path      = "_versions.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = file("${get_repo_root()}/accounts/_common/versions.tf")
+}
+
+generate "variables" {
+  path      = "_variables.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = file("${get_repo_root()}/accounts/_common/variables.tf")
+}
+
+generate "providers" {
+  path      = "_providers.tf"
+  if_exists = "overwrite"
+  contents  = file("${get_repo_root()}/accounts/_common/providers.tf")
+}
+
+remote_state {
+  backend = local.backend_type
+  config = {
+    {% if tg_local %}
+    path = format("%s/terraform.tfstate", path_relative_to_include())
+    {% else %}
+    encrypt        = true
+    region         = local.aws_region
+    key            = format("%s/terraform.tfstate", path_relative_to_include())
+    bucket         = local.state_bucket
+    dynamodb_table = local.dynamodb_table
+    profile        = local.profile_name
+    {% endif %}
+  }
+  {% if not tg_local %}
+  generate = {
+    path      = "_backend.tf"
+    if_exists = "overwrite"
+    contents  = <<EOF
+      terraform {
+        backend "s3" {
+          bucket         = "${local.state_bucket}"
+          key            = "${format("%s/terraform.tfstate", path_relative_to_include())}"
+          region         = "${local.aws_region}"
+          dynamodb_table = "${local.dynamodb_table}"
+          encrypt        = true
+          profile        = "${local.profile_name != null ? local.profile_name : ""}"
+        }
+      }
+    EOF
+  }
+  {% else %}
+  generate = {
+    path      = "_backend.tf"
+    if_exists = "overwrite"
+    contents  = <<EOF
+      terraform {
+        backend "local" {
+          path = "${format("%s/terraform.tfstate", path_relative_to_include())}"
+        }
+      }
+    EOF
+  }
+  {% endif %}
+}
+
+download_dir = "${get_repo_root()}/.terragrunt-cache/${get_path_from_repo_root()}"
+
+inputs = merge(
+  local.global_vars,
+  local.account_vars,
+  local.region_vars,
+  {
+    common_tags = {
+      environment-type = local.env
+      created-by       = "terraform"
+      managed-by       = "terraform"
+      project_name     = local.project_name
+      cost-center      = try(local.account_vars.cost_center, null)
+      map_migrate      = try(local.global_vars.map_migrate, null)
+    }
+  }
+)

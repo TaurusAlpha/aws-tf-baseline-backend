@@ -1,0 +1,9 @@
+include "base" {
+  path = find_in_parent_folders("terragrunt_base.hcl")
+}
+
+locals {
+  mgmt_account_id   = "{{ management_account_id }}"
+  mgmt_profile_name = "{{ management_profile_name }}"
+  default_region    = "{{ default_region }}"
+}

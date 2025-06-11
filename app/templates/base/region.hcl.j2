@@ -1,0 +1,11 @@
+include "account" {
+  path = find_in_parent_folders("account.hcl")
+}
+
+locals {
+  env          = "{{ env }}"
+  env_type     = "{{ env_type }}"
+  aws_region   = "{{ aws_region }}"
+  az_number    = {{ az_number }}
+  project_name = "{{ project_name }}"
+}
