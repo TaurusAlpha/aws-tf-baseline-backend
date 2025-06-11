@@ -5,16 +5,17 @@
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": false,
     "python.formatting.provider": "black",
+    "black-formatter.importStrategy": "fromEnvironment",
     "python.sortImports.path": "isort",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+        "source.organizeImports": "explicit"
     },
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.organizeImports": true
+            "source.organizeImports": "explicit"
         }
     }
 }
